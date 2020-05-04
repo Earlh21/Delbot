@@ -24,7 +24,7 @@ namespace Delbot
 			var users = await message.GetReactionUsersAsync(new Emoji(emoji), Int32.MaxValue).FlattenAsync();
 			List<string> usernames = users.Select(user => user.Username).ToList();
 
-			string directory = "~/DelbotOutput/";
+			string directory = "/~/DelbotOutput/";
 			if (!Directory.Exists(directory))
 			{
 				Directory.CreateDirectory(directory);
