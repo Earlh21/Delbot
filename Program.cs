@@ -59,7 +59,7 @@ namespace Delbot
 			client.Ready += Ready;
 			client.MessageReceived += MessageReceived;
 			
-			var token = File.ReadAllText(Directory.GetCurrentDirectory() + "\\token.txt");
+			var token = File.ReadAllText(Directory.GetCurrentDirectory() + "//token.txt");
 
 			await client.LoginAsync(TokenType.Bot, token);
 			await client.StartAsync();
