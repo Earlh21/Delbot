@@ -14,8 +14,8 @@ namespace Delbot
 {
 	internal class Program
 	{
-		private static bool sent_closing_message = false;
-		private static bool sent_opening_message = false;
+		private static bool sent_closing_message;
+		private static bool sent_opening_message;
 
 		private static SocketGuild server;
 		private static DiscordSocketClient client;
@@ -72,6 +72,17 @@ namespace Delbot
 			CommandHandler command_handler = new CommandHandler(client);
 			await command_handler.InstallCommandsAsync();
 			
+			//Fix for the bot to not send an opening/closing message on startup
+			if (TimeBetween(OPENING_TIME_UTC, CLOSING_TIME_UTC, GetCurrentTime()))
+			{
+				sent_opening_message = true;
+			}
+			else
+			{
+				sent_closing_message = true;
+			}
+			
+			//Code to send closing and opening messages
 			while (true)
 			{
 				if (server != null)
