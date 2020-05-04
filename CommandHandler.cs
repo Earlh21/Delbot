@@ -12,11 +12,11 @@ namespace Delbot
 
 		private const char COMMAND_PREFIX = '!';
 
-		public CommandHandler(DiscordSocketClient client, CommandService commands)
+		public CommandHandler(DiscordSocketClient client)
 		{
 			this.client = client;
-			this.commands = commands;
-
+			
+			commands = new CommandService();
 			commands.AddModulesAsync(Assembly.GetExecutingAssembly(), null);
 		}
 

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
@@ -17,11 +19,21 @@ namespace Delbot
 			[Summary("The emoji to check.")]
 			string emoji)
 		{
-			SocketMessage message = Context.Channel.GetCachedMessage(message_id);
+			IMessage message = await Context.Channel.GetMessageAsync(message_id);
 			
-			var users = await message.GetReactionUsersAsync(new Emoji(emoji + "️"), Int32.MaxValue).FlattenAsync();
+			var users = await message.GetReactionUsersAsync(new Emoji(emoji), Int32.MaxValue).FlattenAsync();
+			List<string> usernames = users.Select(user => user.Username).ToList();
+
+			string directory = "C:/Users/Idrialite/Desktop/DelbotOutput/";
+			if (!Directory.Exists(directory))
+			{
+				Directory.CreateDirectory(directory);
+			}
 			
-			
+			string filename = DateTime.Now.ToString("yyyy-MM-dd hh-mm-ss") + " User Dump.txt";
+
+			string path = directory + filename;
+			await File.WriteAllLinesAsync(path, usernames);
 		}
 	}
 }

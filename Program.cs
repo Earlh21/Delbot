@@ -69,6 +69,9 @@ namespace Delbot
 			await client.LoginAsync(TokenType.Bot, token);
 			await client.StartAsync();
 
+			CommandHandler command_handler = new CommandHandler(client);
+			await command_handler.InstallCommandsAsync();
+			
 			while (true)
 			{
 				if (server != null)
