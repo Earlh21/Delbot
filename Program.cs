@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Mime;
 using System.Reflection;
 using System.Resources;
 using System.Runtime.InteropServices;
@@ -58,8 +59,9 @@ namespace Delbot
 			client.ReactionAdded += ReactionAdded;
 			client.Ready += Ready;
 			client.MessageReceived += MessageReceived;
+			client.Log += Log;
 			
-			var token = File.ReadAllText(Directory.GetCurrentDirectory() + "//token.txt");
+			var token = File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "//token.txt");
 
 			await client.LoginAsync(TokenType.Bot, token);
 			await client.StartAsync();
@@ -104,6 +106,8 @@ namespace Delbot
 				await Task.Delay(1 * 1000);
 			}
 		}
+
+		
 
 		private static TimeSpan GetCurrentTime()
 		{
@@ -224,6 +228,12 @@ namespace Delbot
 					}
 				}
 			}
+		}
+		
+		private static Task Log(LogMessage arg)
+		{
+			Console.WriteLine(arg.ToString(null, true, true));
+			return Task.CompletedTask;
 		}
 	}
 }
