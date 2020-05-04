@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Resources;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -55,8 +58,8 @@ namespace Delbot
 			client.ReactionAdded += ReactionAdded;
 			client.Ready += Ready;
 			client.MessageReceived += MessageReceived;
-
-			var token = "NzAxMTYyMzU5MzMwMTc3MDM0.Xptm4A.J0fDqidYlIkD53s0aHQuyodAfmE";
+			
+			var token = File.ReadAllText(Directory.GetCurrentDirectory() + "\\token.txt");
 
 			await client.LoginAsync(TokenType.Bot, token);
 			await client.StartAsync();
