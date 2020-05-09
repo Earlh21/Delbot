@@ -20,7 +20,7 @@ namespace Delbot
 		private static SocketGuild server;
 		private static DiscordSocketClient client;
 		
-		private const string CHECK_EMOJI = "☑️";
+		private const string BUYER_ROLE_EMOJI = "💰";
 		private const string TIMER_EMOJI = "⏲️";
 		private const string COMMAND_PREFIX = "!";
 
@@ -215,15 +215,13 @@ namespace Delbot
 				IMessage message = await channel.GetMessageAsync(reactionAdded.MessageId);
 				SocketGuildUser message_author = server.GetUser(message.Author.Id);
 
-				//Add the buyer role to the user if the reaction is a check
+				//Add the buyer role to the user if the reaction matches
 				SocketRole buyer_role = server.GetRole(BUYER_ROLE_ID);
-				if (reactionAdded.Emote.Name.Equals(CHECK_EMOJI))
+				if (reactionAdded.Emote.Name.Equals(BUYER_ROLE_EMOJI))
 				{
 					await message_author.AddRoleAsync(buyer_role);
 				}
-
-				//Remove all other reactions from the order message
-
+				
 				//Copy all reactions in the message
 				Dictionary<IEmote, ReactionMetadata> reactions = new Dictionary<IEmote, ReactionMetadata>();
 				foreach (KeyValuePair<IEmote, ReactionMetadata> pair in message.Reactions)
