@@ -20,7 +20,8 @@ namespace Delbot
 		private static SocketGuild server;
 		private static DiscordSocketClient client;
 		
-		private const string BUYER_ROLE_EMOJI = "💰";
+		private static readonly string[] BUYER_ROLE_EMOJIS = {"💰", "☑️"};
+
 		private const string TIMER_EMOJI = "⏲️";
 		private const string COMMAND_PREFIX = "!";
 
@@ -158,9 +159,9 @@ namespace Delbot
 			return "<@" + user_id + ">";
 		}
 		
-		private static Task MessageReceived(SocketMessage messageReceived)
+		private static Task MessageReceived(SocketMessage message_received)
 		{
-			if (messageReceived.Channel.Id != ORDER_CHANNEL_ID)
+			if (message_received.Channel.Id != ORDER_CHANNEL_ID)
 			{
 				return Task.CompletedTask;
 			}
@@ -170,19 +171,19 @@ namespace Delbot
 				return Task.CompletedTask;
 			}
 
-			if (messageReceived.Author.Id == BOT_USER_ID)
+			if (message_received.Author.Id == BOT_USER_ID)
 			{
 				return Task.CompletedTask;
 			}
 
-			messageReceived.AddReactionAsync(new Emoji(TIMER_EMOJI));
+			message_received.AddReactionAsync(new Emoji(TIMER_EMOJI));
 
 			return Task.CompletedTask;
 		}
 
-		private static async Task UserJoined(SocketGuildUser userJoined)
+		private static async Task UserJoined(SocketGuildUser user_joined)
 		{
-			SocketGuild guild = userJoined.Guild;
+			SocketGuild guild = user_joined.Guild;
 
 			if (guild.Id != SERVER_ID)
 			{
@@ -193,7 +194,7 @@ namespace Delbot
 
 			SocketTextChannel welcome_channel = server.GetTextChannel(WELCOME_CHANNEL_ID);
 
-			await welcome_channel.SendMessageAsync(MentionUser(userJoined.Id) +
+			await welcome_channel.SendMessageAsync(MentionUser(user_joined.Id) +
 			                                       " Welcome to Del's Bells-- We sell Bells! " +
 			                                       "If you'd like to purchase Bells, you may make your way to " +
 			                                       MentionChannel(ORDER_INSTRUCTIONS_CHANNEL_ID) +
@@ -204,7 +205,7 @@ namespace Delbot
 			                                       ", welcome to our ACNH community, and enjoy your stay, gronk." +
 			                                       Environment.NewLine +
 			                                       "------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
-			await userJoined.AddRoleAsync(new_user_role);
+			await user_joined.AddRoleAsync(new_user_role);
 		}
 
 		private static async Task ReactionAdded(Cacheable<IUserMessage, ulong> message_cacheable,
@@ -217,9 +218,12 @@ namespace Delbot
 
 				//Add the buyer role to the user if the reaction matches
 				SocketRole buyer_role = server.GetRole(BUYER_ROLE_ID);
-				if (reactionAdded.Emote.Name.Equals(BUYER_ROLE_EMOJI))
+				foreach (string BUYER_ROLE_EMOJI in BUYER_ROLE_EMOJIS)
 				{
-					await message_author.AddRoleAsync(buyer_role);
+					if (reactionAdded.Emote.Name.Equals(BUYER_ROLE_EMOJI))
+					{
+						await message_author.AddRoleAsync(buyer_role);
+					}
 				}
 				
 				//Copy all reactions in the message
@@ -247,7 +251,7 @@ namespace Delbot
 		
 		private static Task Log(LogMessage arg)
 		{
-			Console.WriteLine(arg.ToString(null, true, true));
+			Console.WriteLine(arg.ToString());
 			return Task.CompletedTask;
 		}
 	}
