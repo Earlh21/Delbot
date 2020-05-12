@@ -23,16 +23,17 @@ namespace Delbot
 		public async Task InstallCommandsAsync()
 		{
 			client.MessageReceived += HandleCommandAsync;
+			await Task.CompletedTask;
 		}
 
-		private async Task HandleCommandAsync(SocketMessage messageParam)
+		private async Task HandleCommandAsync(SocketMessage message_param)
 		{
-			var message = messageParam as SocketUserMessage;
+			var message = message_param as SocketUserMessage;
 			if (message == null) return;
 
-			int argPos = 0;
+			int arg_pos = 0;
 
-			if (!message.HasCharPrefix(COMMAND_PREFIX, ref argPos) || message.Author.IsBot)
+			if (!message.HasCharPrefix(COMMAND_PREFIX, ref arg_pos) || message.Author.IsBot)
 			{
 				return;
 			}
@@ -41,7 +42,7 @@ namespace Delbot
 
 			await commands.ExecuteAsync(
 				context: context, 
-				argPos: argPos,
+				argPos: arg_pos,
 				services: null);
 		}
 	}

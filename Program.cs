@@ -1,31 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net.Mime;
-using System.Reflection;
-using System.Resources;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
 
 namespace Delbot
 {
-	internal class Program
+	internal static class Program
 	{
-		private static bool sent_closing_message;
-		private static bool sent_opening_message;
-
 		private static SocketGuild server;
 		private static DiscordSocketClient client;
 		
 		private static readonly string[] BUYER_ROLE_EMOJIS = {"💰", "☑️"};
-
 		private const string TIMER_EMOJI = "⏲️";
-		private const string COMMAND_PREFIX = "!";
 
 		private const ulong BOT_USER_ID = 701162359330177034;
+		private const int OPENING_CLOSING_PERIOD = 1000 * 60;
 
 #if DEBUG
 		private static readonly TimeSpan OPENING_TIME_UTC = new TimeSpan(0, 0, 0, 0);
@@ -52,7 +43,7 @@ namespace Delbot
 		private const ulong ORDER_CHANNEL_ID = 701118059938840646;
 		private const ulong BUYER_ROLE_ID = 699784096166969658;
 #endif
-		private static async Task Main(string[] args)
+		private static async Task Main()
 		{
 			client = new DiscordSocketClient();
 
@@ -62,7 +53,7 @@ namespace Delbot
 			client.MessageReceived += MessageReceived;
 			client.Log += Log;
 			
-			string token = File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "//token.txt");
+			string token = await File.ReadAllTextAsync(AppDomain.CurrentDomain.BaseDirectory + "//token.txt");
 			token = token.Replace(Environment.NewLine, "");
 			token = token.Replace(" ", "");
 			token = token.Replace("\t", "");
@@ -72,6 +63,43 @@ namespace Delbot
 
 			CommandHandler command_handler = new CommandHandler(client);
 			await command_handler.InstallCommandsAsync();
+
+			OpeningClosingLoopAsync();
+
+			await Task.Delay(-1);
+		}
+
+		private static TimeSpan GetCurrentTime()
+		{
+			return DateTime.UtcNow.TimeOfDay;
+		}
+
+		private static bool TimeBetween(TimeSpan start, TimeSpan end, TimeSpan time)
+		{
+			if (end < start)
+			{
+				return time < end || time > start;
+			}
+			else
+			{
+				return time > start && time < end;
+			}
+		}
+
+		private static string MentionChannel(ulong channel_id)
+		{
+			return "<#" + channel_id + ">";
+		}
+
+		private static string MentionUser(ulong user_id)
+		{
+			return "<@" + user_id + ">";
+		}
+
+		private static async void OpeningClosingLoopAsync()
+		{
+			bool sent_opening_message = false;
+			bool sent_closing_message = false;
 			
 			//Fix for the bot to not send an opening/closing message on startup
 			if (TimeBetween(OPENING_TIME_UTC, CLOSING_TIME_UTC, GetCurrentTime()))
@@ -83,7 +111,6 @@ namespace Delbot
 				sent_closing_message = true;
 			}
 			
-			//Code to send closing and opening messages
 			while (true)
 			{
 				if (server != null)
@@ -121,42 +148,14 @@ namespace Delbot
 					}
 				}
 
-				await Task.Delay(1 * 1000);
+				await Task.Delay(OPENING_CLOSING_PERIOD);
 			}
 		}
-
 		
-
-		private static TimeSpan GetCurrentTime()
-		{
-			return DateTime.UtcNow.TimeOfDay;
-		}
-
-		private static bool TimeBetween(TimeSpan start, TimeSpan end, TimeSpan time)
-		{
-			if (end < start)
-			{
-				return time < end || time > start;
-			}
-			else
-			{
-				return time > start && time < end;
-			}
-		}
-
 		private static async Task Ready()
 		{
 			server = client.GetGuild(SERVER_ID);
-		}
-
-		private static string MentionChannel(ulong channel_id)
-		{
-			return "<#" + channel_id + ">";
-		}
-
-		private static string MentionUser(ulong user_id)
-		{
-			return "<@" + user_id + ">";
+			await Task.CompletedTask;
 		}
 		
 		private static Task MessageReceived(SocketMessage message_received)
@@ -209,18 +208,18 @@ namespace Delbot
 		}
 
 		private static async Task ReactionAdded(Cacheable<IUserMessage, ulong> message_cacheable,
-			ISocketMessageChannel channel, SocketReaction reactionAdded)
+			ISocketMessageChannel channel, SocketReaction reaction_added)
 		{
 			if (channel.Id == ORDER_CHANNEL_ID)
 			{
-				IMessage message = await channel.GetMessageAsync(reactionAdded.MessageId);
+				IMessage message = await channel.GetMessageAsync(reaction_added.MessageId);
 				SocketGuildUser message_author = server.GetUser(message.Author.Id);
 
 				//Add the buyer role to the user if the reaction matches
 				SocketRole buyer_role = server.GetRole(BUYER_ROLE_ID);
-				foreach (string BUYER_ROLE_EMOJI in BUYER_ROLE_EMOJIS)
+				foreach (string buyer_role_emoji in BUYER_ROLE_EMOJIS)
 				{
-					if (reactionAdded.Emote.Name.Equals(BUYER_ROLE_EMOJI))
+					if (reaction_added.Emote.Name.Equals(buyer_role_emoji))
 					{
 						await message_author.AddRoleAsync(buyer_role);
 					}
@@ -236,7 +235,7 @@ namespace Delbot
 				//Remove any reactions from any users that don't match the recently added reaction
 				foreach (KeyValuePair<IEmote, ReactionMetadata> pair in reactions)
 				{
-					if (!pair.Key.Equals(reactionAdded.Emote))
+					if (!pair.Key.Equals(reaction_added.Emote))
 					{
 						var users = await message.GetReactionUsersAsync(pair.Key, Int32.MaxValue).FlattenAsync();
 
