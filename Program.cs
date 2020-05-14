@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
+using PayPalTest;
 
 namespace Delbot
 {
@@ -11,9 +12,27 @@ namespace Delbot
 	{
 		private static SocketGuild server;
 		private static DiscordSocketClient client;
-		
+
 		private static readonly string[] BUYER_ROLE_EMOJIS = {"💰", "☑️"};
+
+		public static readonly string[] REQUIRED_ORDER_PARAMETERS =
+		{
+			"in game name",
+			"island name",
+			"bell bundle",
+			"paypal name",
+			"timezone"
+		};
+
+		public static readonly Dictionary<int, decimal> PRICES = new Dictionary<int, decimal>()
+		{
+			{1, 3.49m},
+			{3, 6.99m},
+			{6, 9.99m}
+		};
+
 		private const string TIMER_EMOJI = "⏲️";
+		private const string START_ORDER_EMOJI = "👍";
 
 		private const ulong BOT_USER_ID = 701162359330177034;
 		private const int OPENING_CLOSING_PERIOD = 1000 * 60;
@@ -30,6 +49,8 @@ namespace Delbot
 		private const ulong SERVER_INFO_CHANNEL_ID = 701167513844711584;
 		private const ulong ORDER_CHANNEL_ID = 702313424553771030;
 		private const ulong BUYER_ROLE_ID = 703000426584211901;
+		private const ulong ADMIN_ROLE_ID = 0;
+		private const ulong PROGRAMMER_ROLE_ID = 0;
 #else
 		private static readonly TimeSpan OPENING_TIME_UTC = new TimeSpan(0, 16, 0, 0);
 		private static readonly TimeSpan CLOSING_TIME_UTC = new TimeSpan(0, 23, 59, 0);
@@ -42,6 +63,8 @@ namespace Delbot
 		private const ulong SERVER_INFO_CHANNEL_ID = 699765156447518784;
 		private const ulong ORDER_CHANNEL_ID = 701118059938840646;
 		private const ulong BUYER_ROLE_ID = 699784096166969658;
+		private const ulong ADMIN_ROLE_ID = 0;
+		private const ulong PROGRAMMER_ROLE_ID = 0;
 #endif
 		private static async Task Main()
 		{
@@ -51,8 +74,8 @@ namespace Delbot
 			client.ReactionAdded += ReactionAdded;
 			client.Ready += Ready;
 			client.MessageReceived += MessageReceived;
-			client.Log += Log;
-			
+			client.Log += Logging.ConsoleLog;
+
 			string token = await File.ReadAllTextAsync(AppDomain.CurrentDomain.BaseDirectory + "//token.txt");
 			token = token.Replace(Environment.NewLine, "");
 			token = token.Replace(" ", "");
@@ -100,7 +123,7 @@ namespace Delbot
 		{
 			bool sent_opening_message = false;
 			bool sent_closing_message = false;
-			
+
 			//Fix for the bot to not send an opening/closing message on startup
 			if (TimeBetween(OPENING_TIME_UTC, CLOSING_TIME_UTC, GetCurrentTime()))
 			{
@@ -110,7 +133,7 @@ namespace Delbot
 			{
 				sent_closing_message = true;
 			}
-			
+
 			while (true)
 			{
 				if (server != null)
@@ -151,33 +174,51 @@ namespace Delbot
 				await Task.Delay(OPENING_CLOSING_PERIOD);
 			}
 		}
-		
+
 		private static async Task Ready()
 		{
 			server = client.GetGuild(SERVER_ID);
 			await Task.CompletedTask;
 		}
-		
-		private static Task MessageReceived(SocketMessage message_received)
+
+		private static async Task MessageReceived(SocketMessage message_received)
 		{
+			SocketUserMessage message = message_received as SocketUserMessage;
+			if (message == null)
+			{
+				return;
+			}
+			
 			if (message_received.Channel.Id != ORDER_CHANNEL_ID)
 			{
-				return Task.CompletedTask;
+				return;
 			}
 
 			if (TimeBetween(OPENING_TIME_UTC, CLOSING_TIME_UTC, GetCurrentTime()))
 			{
-				return Task.CompletedTask;
+				return;
 			}
 
 			if (message_received.Author.Id == BOT_USER_ID)
 			{
-				return Task.CompletedTask;
+				return;
 			}
 
-			message_received.AddReactionAsync(new Emoji(TIMER_EMOJI));
+			try
+			{
+				ParseOrder(message);
+			}
+			catch (ArgumentException ex)
+			{
+				//TODO: Add X
+				SocketTextChannel order_channel = server.GetTextChannel(ORDER_CHANNEL_ID);
+				await order_channel.SendMessageAsync(ex.Message);
+				return;
+			}
 
-			return Task.CompletedTask;
+			await message_received.AddReactionAsync(new Emoji(TIMER_EMOJI));
+
+			await Task.CompletedTask;
 		}
 
 		private static async Task UserJoined(SocketGuildUser user_joined)
@@ -207,6 +248,72 @@ namespace Delbot
 			await user_joined.AddRoleAsync(new_user_role);
 		}
 
+		private static Order ParseOrder(SocketUserMessage message)
+		{
+			string[] lines = message.Content.Split("\n");
+
+			Dictionary<string, string> order_details = new Dictionary<string, string>();
+
+			foreach (string line in lines)
+			{
+				if (line.IndexOf(":") == -1)
+				{
+					throw new ArgumentException(
+						"Invalid order request: colon required to separate parameter name and value\n" +
+						"\tat " + line);
+				}
+
+				string[] line_data = line.Split(":");
+				order_details[line_data[0].ToLower().Trim()] = line_data[1].ToLower().Trim();
+			}
+
+			foreach (string required_parameter in REQUIRED_ORDER_PARAMETERS)
+			{
+				if (!order_details.ContainsKey(required_parameter))
+				{
+					throw new ArgumentException("Invalid order request: parameter " + '\"' + required_parameter + '\"' +
+					                            " required.");
+				}
+				
+				if (String.IsNullOrWhiteSpace(order_details[required_parameter]))
+				{
+					throw new ArgumentException("Invalid order request: parameter " + '\"' + required_parameter + '\"' + " cannot be empty");
+				}
+			}
+
+			int amount;
+			decimal price;
+			string in_game_name;
+			ulong discord_id = message.Author.Id;
+			ulong message_id = message.Id;
+			string island_name;
+			string paypal_name;
+
+			try
+			{
+				amount = Convert.ToInt32(order_details["bell bundle"]);
+			}
+			catch (FormatException ex)
+			{
+				throw new ArgumentException("Invalid order request: bell bundle must be a number");
+			}
+
+			try
+			{
+				price = PRICES[amount];
+			}
+			catch (KeyNotFoundException ex)
+			{
+				throw new ArgumentException("Invalid order request: requested bell bundle is not supported");
+			}
+
+			in_game_name = order_details["in game name"];
+			island_name = order_details["island name"];
+			paypal_name = order_details["paypal name"];
+
+			return new Order(amount, price, in_game_name, discord_id, message_id, island_name, paypal_name);
+		}
+		
 		private static async Task ReactionAdded(Cacheable<IUserMessage, ulong> message_cacheable,
 			ISocketMessageChannel channel, SocketReaction reaction_added)
 		{
@@ -224,7 +331,34 @@ namespace Delbot
 						await message_author.AddRoleAsync(buyer_role);
 					}
 				}
-				
+
+				//Create and send PayPal order if the reaction matches
+				if (reaction_added.Emote.Name.Equals(START_ORDER_EMOJI))
+				{
+					try
+					{
+						Order order = ParseOrder(message_cacheable.Value as SocketUserMessage);
+						PayPal.CreateOrderResponse response = await PayPal.CreateOrderAsync(order.Amount, order.Price);
+						
+						if (!response.successful)
+						{
+							await Logging.DiscordLogAsync(server, "Order creation failed: " + response.raw_content);
+						}
+						else
+						{
+							string log_message = "Created order " + response.id + ": amount:" + order.Amount +
+							                     " price:" + order.Price.ToString("0.00") + " uid:" + order.DiscordId;
+							await Logging.FileLogAsync("create_log.txt", log_message);
+						}
+					}
+					catch (ArgumentException ex)
+					{
+						SocketTextChannel order_channel = server.GetTextChannel(ORDER_CHANNEL_ID);
+						await order_channel.SendMessageAsync(ex.Message);
+						return;
+					}
+				}
+
 				//Copy all reactions in the message
 				Dictionary<IEmote, ReactionMetadata> reactions = new Dictionary<IEmote, ReactionMetadata>();
 				foreach (KeyValuePair<IEmote, ReactionMetadata> pair in message.Reactions)
@@ -246,12 +380,6 @@ namespace Delbot
 					}
 				}
 			}
-		}
-		
-		private static Task Log(LogMessage arg)
-		{
-			Console.WriteLine(arg.ToString());
-			return Task.CompletedTask;
 		}
 	}
 }

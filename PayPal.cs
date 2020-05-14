@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using RestSharp;
@@ -92,7 +93,7 @@ namespace PayPalTest
 						{
 							new Item
 							{
-								name = amount + " ACNH Bells",
+								name = amount + " million ACNH Bells",
 								quantity = "1",
 								unit_amount = new Money
 								{
@@ -118,9 +119,27 @@ namespace PayPalTest
 			request.AddJsonBody(JsonConvert.SerializeObject(model));
 
 			var response = await client.ExecuteAsync(request);
-			return JsonConvert.DeserializeObject<CreateOrderResponse>(response.Content);
+
+			if (response.IsSuccessful)
+			{
+				CreateOrderResponse order_response = JsonConvert.DeserializeObject<CreateOrderResponse>(response.Content);
+				order_response.successful = true;
+				order_response.raw_content = response.Content;
+				return order_response;
+			}
+
+			return new CreateOrderResponse
+			{
+				raw_content = response.Content,
+				successful = false
+			};
 		}
 
+		/// <summary>
+		/// Captures an approved order's payment.
+		/// </summary>
+		/// <param name="order_id">ID of the order to capture.</param>
+		/// <returns>PayPal's response.</returns>
 		public static async Task<CaptureOrderResponse> CaptureOrderAsync(string order_id)
 		{
 			var client = new RestClient(PAYPAL_URL);
@@ -130,18 +149,35 @@ namespace PayPalTest
 			request.AddHeader("Content-Type", "application/json");
 
 			var response = await client.ExecuteAsync(request);
-			return JsonConvert.DeserializeObject<CaptureOrderResponse>(response.Content);
+			
+			if (response.IsSuccessful)
+			{
+				CaptureOrderResponse order_response = JsonConvert.DeserializeObject<CaptureOrderResponse>(response.Content);
+				order_response.successful = true;
+				order_response.raw_content = response.Content;
+				return order_response;
+			}
+
+			return new CaptureOrderResponse
+			{
+				raw_content = response.Content,
+				successful = false
+			};
 		}
 
 		public struct CaptureOrderResponse
 		{
+			public string raw_content;
 			public string status;
+			public bool successful;
 		}
 
 		public struct CreateOrderResponse
 		{
+			public string raw_content;
 			public string id;
 			public LinkDescription[] links;
+			public bool successful;
 		}
 
 		public struct LinkDescription
