@@ -9,9 +9,9 @@ namespace Delbot
 	public static class Orders
 	{
 		private static readonly string CURRENT_ORDERS_FILE_PATH =
-			Environment.GetEnvironmentVariable("HOME") + "/current_orders.txt";
+			Environment.GetEnvironmentVariable("HOME") + "/debug_current_orders.txt";
 
-		public static async Task WriteOrderUser(string order_id, ulong discord_id)
+		public static async Task WriteOrderUserAsync(string order_id, ulong discord_id)
 		{
 			if (!File.Exists(CURRENT_ORDERS_FILE_PATH))
 			{
@@ -22,7 +22,7 @@ namespace Delbot
 			await File.AppendAllLinesAsync(CURRENT_ORDERS_FILE_PATH, new [] {line});
 		}
 
-		public static async Task<string> GetOrderUser(string order_id)
+		public static async Task<string> GetOrderUserAsync(string order_id)
 		{
 			if (!File.Exists(CURRENT_ORDERS_FILE_PATH))
 			{
@@ -44,7 +44,7 @@ namespace Delbot
 			return null;
 		}
 
-		public static async Task RemoveOrder(string order_id)
+		public static async Task RemoveOrderAsync(string order_id)
 		{
 			if (!File.Exists(CURRENT_ORDERS_FILE_PATH))
 			{

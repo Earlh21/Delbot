@@ -12,25 +12,23 @@ namespace PayPalTest
 	{
 		private const int EXPIRE_THRESHOLD = 60;
 
-		private static readonly string CLIENT_ID = "";
-		private static readonly string CLIENT_SECRET = "";
-
-		private static string access_token;
-		private static DateTime access_expire;
+		private static readonly string CLIENT_ID;
+		private static readonly string CLIENT_SECRET;
 
 		private const string OAUTH_RESOURCE = "/v1/oauth2/token";
 		private const string CREATE_ORDER_RESOURCE = "/v2/checkout/orders";
+		private static readonly string CLIENT_ID_PATH = AppDomain.CurrentDomain.BaseDirectory + "/client_id.txt";
+		private static readonly string CLIENT_SECRET_PATH = AppDomain.CurrentDomain.BaseDirectory + "/client_secret.txt";
 
 #if DEBUG
 		private const string PAYPAL_URL = "https://api.sandbox.paypal.com";
-		private static readonly string CLIENT_ID_PATH = "";
-		private static readonly string CLIENT_SECRET_PATH = "";
 #else
 		private const string PAYPAL_URL = "https://api.paypal.com";
-		private static readonly string CLIENT_ID_PATH = "";
-		private static readonly string CLIENT_SECRET_PATH = "";
 #endif
 
+		private static string access_token;
+		private static DateTime access_expire;
+		
 		static PayPal()
 		{
 			CLIENT_ID = File.ReadAllText(CLIENT_ID_PATH).Replace(" ", "").Replace(Environment.NewLine, "");
