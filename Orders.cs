@@ -8,8 +8,13 @@ namespace Delbot
 {
 	public static class Orders
 	{
+		#if DEBUG
 		private static readonly string CURRENT_ORDERS_FILE_PATH =
 			Environment.GetEnvironmentVariable("HOME") + "/debug_current_orders.txt";
+		#else
+		private static readonly string CURRENT_ORDERS_FILE_PATH =
+			Environment.GetEnvironmentVariable("HOME") + "/current_orders.txt";
+#endif
 
 		public static async Task WriteOrderUserAsync(string order_id, ulong discord_id)
 		{
@@ -60,6 +65,7 @@ namespace Delbot
 				if (line_data[0].Equals(order_id))
 				{
 					lines.RemoveAt(i);
+					
 					await File.WriteAllLinesAsync(CURRENT_ORDERS_FILE_PATH, lines);
 					return;
 				}

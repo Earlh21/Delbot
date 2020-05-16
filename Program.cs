@@ -154,7 +154,9 @@ namespace Delbot
 					Embed embed = embed_builder.Build();
 					
 					string discord_id_string = await Orders.GetOrderUserAsync(order_id);
+					//TODO: This doesn't work
 					await Orders.RemoveOrderAsync(order_id);
+					
 					if (discord_id_string == null)
 					{
 						SocketRole programmer_role = server.GetRole(PROGRAMMER_ROLE_ID);
@@ -162,11 +164,20 @@ namespace Delbot
 							"Order payment captured but order wasn't found in the current orders file. " +
 							"Order ID: " + order_id + " " + programmer_role.Mention;
 						await Logging.DiscordLogAsync(server, log_message);
+						return;
 					}
 
 					ulong discord_id = Convert.ToUInt64(discord_id_string);
 					SocketUser user = server.GetUser(discord_id);
-					//TODO: Implement check for missing user
+					if (user == null)
+					{
+						SocketRole programmer_role = server.GetRole(PROGRAMMER_ROLE_ID);
+						string log_message =
+							"Order payment captured but order user wasn't found in the server. " +
+							"Order ID: " + order_id + " " + programmer_role.Mention;
+						await Logging.DiscordLogAsync(server, log_message);
+						return;
+					}
 
 					await user.SendMessageAsync("", false, embed);
 

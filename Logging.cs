@@ -13,10 +13,10 @@ namespace Delbot
 		//TODO: Fill these in
 #if DEBUG
 		private const ulong LOG_CHANNEL_ID = 710668958059200593;
-		private static readonly string LOG_DIRECTORY = Environment.GetEnvironmentVariable("HOME") + "/logs/";
+		private static readonly string LOG_DIRECTORY = Environment.GetEnvironmentVariable("HOME") + "/debug_logs/";
 #else
 		private const ulong LOG_CHANNEL_ID = 0;
-		private static readonly string LOG_DIRECTORY = Environment.GetEnvironmentVariable("HOME") + "/debug_logs/";
+		private static readonly string LOG_DIRECTORY = Environment.GetEnvironmentVariable("HOME") + "/logs/";
 #endif
 
 		public static async Task FileLogAsync(string log_file, string value)
