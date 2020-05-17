@@ -26,9 +26,9 @@ namespace Delbot
 
 		public static readonly Dictionary<int, decimal> PRICES = new Dictionary<int, decimal>()
 		{
-			{1, 3.49m},
-			{3, 6.99m},
-			{6, 9.99m}
+			{3, 4.99m},
+			{6, 7.49m},
+			{10, 11.49m}
 		};
 
 		private const string TIMER_EMOJI = "⏲️";
@@ -69,7 +69,7 @@ namespace Delbot
 		private const ulong PROGRAMMER_ROLE_ID = 0;
 		
 		private static readonly string APPROVED_ORDERS_DIRECTORY =
-			Environment.GetEnvironmentVariable("HOME") + "/debug_approvals/";
+			Environment.GetEnvironmentVariable("HOME") + "/approvals/";
 #endif
 		private static async Task Main()
 		{

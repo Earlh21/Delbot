@@ -105,7 +105,8 @@ namespace PayPalTest
 				
 				application_context =
 				{
-					shipping_preference = "NO_SHIPPING"
+					shipping_preference = "NO_SHIPPING",
+					return_url = "https://earlh21.github.io/delsbells/thankyou"
 				}
 			};
 			
@@ -225,6 +226,7 @@ namespace PayPalTest
 		private struct ApplicationContext
 		{
 			public string shipping_preference;
+			public string return_url;
 		}
 		
 		private struct PayPalTokenModel
