@@ -33,6 +33,7 @@ namespace Delbot
 
 		private const string TIMER_EMOJI = "⏲️";
 		private const string START_ORDER_EMOJI = "👍";
+		private const string INVALID_ORDER_EMOJI = "❌";
 
 		private const ulong BOT_USER_ID = 701162359330177034;
 		private const int OPENING_CLOSING_PERIOD = 1000 * 60;
@@ -154,7 +155,6 @@ namespace Delbot
 					Embed embed = embed_builder.Build();
 					
 					string discord_id_string = await Orders.GetOrderUserAsync(order_id);
-					//TODO: This doesn't work
 					await Orders.RemoveOrderAsync(order_id);
 					
 					if (discord_id_string == null)
@@ -164,7 +164,7 @@ namespace Delbot
 							"Order payment captured but order wasn't found in the current orders file. " +
 							"Order ID: " + order_id + " " + programmer_role.Mention;
 						await Logging.DiscordLogAsync(server, log_message);
-						return;
+						continue;
 					}
 
 					ulong discord_id = Convert.ToUInt64(discord_id_string);
@@ -261,17 +261,14 @@ namespace Delbot
 				return;
 			}
 			
-			if (message_received.Channel.Id != ORDER_CHANNEL_ID)
+			if (message.Channel.Id != ORDER_CHANNEL_ID)
 			{
 				return;
 			}
 
-			if (TimeBetween(OPENING_TIME_UTC, CLOSING_TIME_UTC, GetCurrentTime()))
-			{
-				return;
-			}
-
-			if (message_received.Author.Id == BOT_USER_ID)
+			//TODO: This should be removable because of the first check, but leaving it in just for now
+			//Test removing it later
+			if (message.Author.Id == BOT_USER_ID)
 			{
 				return;
 			}
@@ -282,13 +279,11 @@ namespace Delbot
 			}
 			catch (ArgumentException ex)
 			{
-				//TODO: Add X
+				await message.AddReactionAsync(new Emoji(INVALID_ORDER_EMOJI));
 				SocketTextChannel order_channel = server.GetTextChannel(ORDER_CHANNEL_ID);
 				await order_channel.SendMessageAsync(ex.Message);
 				return;
 			}
-
-			await message_received.AddReactionAsync(new Emoji(TIMER_EMOJI));
 
 			await Task.CompletedTask;
 		}
