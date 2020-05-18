@@ -15,7 +15,7 @@ namespace Delbot
 		private const ulong LOG_CHANNEL_ID = 710668958059200593;
 		private static readonly string LOG_DIRECTORY = Environment.GetEnvironmentVariable("HOME") + "/debug_logs/";
 #else
-		private const ulong LOG_CHANNEL_ID = 0;
+		private const ulong LOG_CHANNEL_ID = 701530229105229915;
 		private static readonly string LOG_DIRECTORY = Environment.GetEnvironmentVariable("HOME") + "/logs/";
 #endif
 

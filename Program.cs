@@ -66,8 +66,8 @@ namespace Delbot
 		private const ulong SERVER_INFO_CHANNEL_ID = 699765156447518784;
 		private const ulong ORDER_CHANNEL_ID = 701118059938840646;
 		private const ulong BUYER_ROLE_ID = 699784096166969658;
-		private const ulong ADMIN_ROLE_ID = 0;
-		private const ulong PROGRAMMER_ROLE_ID = 0;
+		private const ulong ADMIN_ROLE_ID = 706640860476997683;
+		private const ulong PROGRAMMER_ROLE_ID = 699796932087906336;
 		
 		private static readonly string APPROVED_ORDERS_DIRECTORY =
 			Environment.GetEnvironmentVariable("HOME") + "/approvals/";
