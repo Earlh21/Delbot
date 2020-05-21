@@ -11,25 +11,10 @@ namespace Delbot
 	internal static class Program
 	{
 		private static SocketGuild server;
-		private static DiscordSocketClient client;
+		private static DiscordSocketClient discord_client;
+		private static PayPalClient paypal_client;
 
 		private static readonly string[] BUYER_ROLE_EMOJIS = {"💰", "☑️"};
-
-		public static readonly string[] REQUIRED_ORDER_PARAMETERS =
-		{
-			"in game name",
-			"island name",
-			"bell bundle",
-			"paypal name",
-			"timezone"
-		};
-
-		public static readonly Dictionary<int, decimal> PRICES = new Dictionary<int, decimal>()
-		{
-			{3, 4.99m},
-			{6, 7.49m},
-			{10, 11.49m}
-		};
 
 		private const string TIMER_EMOJI = "⏲️";
 		private const string START_ORDER_EMOJI = "👍";
@@ -74,23 +59,22 @@ namespace Delbot
 #endif
 		private static async Task Main()
 		{
-			client = new DiscordSocketClient();
+			string paypal_client_id = Tokens.GetToken(Tokens.TokenType.PayPalClientId);
+			string paypal_client_secret = Tokens.GetToken(Tokens.TokenType.PayPalClientSecret);
+			paypal_client = new PayPalClient(paypal_client_id, paypal_client_secret);
+			
+			discord_client = new DiscordSocketClient();
 
-			client.UserJoined += UserJoined;
-			client.ReactionAdded += ReactionAdded;
-			client.Ready += Ready;
-			client.MessageReceived += MessageReceived;
-			client.Log += Logging.ConsoleLog;
+			discord_client.UserJoined += UserJoined;
+			discord_client.ReactionAdded += ReactionAdded;
+			discord_client.Ready += Ready;
+			discord_client.MessageReceived += MessageReceived;
+			discord_client.Log += Logging.ConsoleLog;
 
-			string token = await File.ReadAllTextAsync(AppDomain.CurrentDomain.BaseDirectory + "/token.txt");
-			token = token.Replace(Environment.NewLine, "");
-			token = token.Replace(" ", "");
-			token = token.Replace("\t", "");
+			await discord_client.LoginAsync(TokenType.Bot, Tokens.GetToken(Tokens.TokenType.DiscordToken));
+			await discord_client.StartAsync();
 
-			await client.LoginAsync(TokenType.Bot, token);
-			await client.StartAsync();
-
-			CommandHandler command_handler = new CommandHandler(client);
+			CommandHandler command_handler = new CommandHandler(discord_client);
 			await command_handler.InstallCommandsAsync();
 
 			OpeningClosingLoopAsync();
@@ -141,7 +125,7 @@ namespace Delbot
 				foreach (string approved_order_path in approved_order_paths)
 				{
 					string order_id = Path.GetFileNameWithoutExtension(approved_order_path);
-					await PayPal.CaptureOrderAsync(order_id);
+					await paypal_client.CaptureOrderAsync(order_id);
 					File.Delete(approved_order_path);
 					
 					await Logging.FileLogAsync("capture_log.txt", "Captured payment for order " + order_id);
@@ -249,7 +233,7 @@ namespace Delbot
 
 		private static async Task Ready()
 		{
-			server = client.GetGuild(SERVER_ID);
+			server = discord_client.GetGuild(SERVER_ID);
 			await Task.CompletedTask;
 		}
 
@@ -315,70 +299,9 @@ namespace Delbot
 			await user_joined.AddRoleAsync(new_user_role);
 		}
 
-		private static Order ParseOrder(IMessage message)
+		private static OrderDetails ParseOrder(IMessage message)
 		{
-			string[] lines = message.Content.Split("\n");
-
-			Dictionary<string, string> order_details = new Dictionary<string, string>();
-
-			foreach (string line in lines)
-			{
-				if (line.IndexOf(":") == -1)
-				{
-					throw new ArgumentException(
-						"Invalid order request: colon required to separate parameter name and value\n" +
-						"\tat " + line);
-				}
-
-				string[] line_data = line.Split(":");
-				order_details[line_data[0].ToLower().Trim()] = line_data[1].ToLower().Trim();
-			}
-
-			foreach (string required_parameter in REQUIRED_ORDER_PARAMETERS)
-			{
-				if (!order_details.ContainsKey(required_parameter))
-				{
-					throw new ArgumentException("Invalid order request: parameter " + '\"' + required_parameter + '\"' +
-					                            " required.");
-				}
-				
-				if (String.IsNullOrWhiteSpace(order_details[required_parameter]))
-				{
-					throw new ArgumentException("Invalid order request: parameter " + '\"' + required_parameter + '\"' + " cannot be empty");
-				}
-			}
-
-			int amount;
-			decimal price;
-			string in_game_name;
-			ulong discord_id = message.Author.Id;
-			ulong message_id = message.Id;
-			string island_name;
-			string paypal_name;
-
-			try
-			{
-				amount = Convert.ToInt32(order_details["bell bundle"]);
-			}
-			catch (FormatException ex)
-			{
-				throw new ArgumentException("Invalid order request: bell bundle must be a number");
-			}
-
-			try
-			{
-				price = PRICES[amount];
-			}
-			catch (KeyNotFoundException ex)
-			{
-				throw new ArgumentException("Invalid order request: requested bell bundle is not supported");
-			}
-
-			in_game_name = order_details["in game name"];
-			island_name = order_details["island name"];
-			paypal_name = order_details["paypal name"];
-
-			return new Order(amount, price, in_game_name, discord_id, message_id, island_name, paypal_name);
+			
 		}
 		
 		private static async Task ReactionAdded(Cacheable<IUserMessage, ulong> message_cacheable,
@@ -405,8 +328,8 @@ namespace Delbot
 					try
 					{
 						//TODO: Add a check here for null
-						Order order = ParseOrder(message);
-						PayPal.CreateOrderResponse response = await PayPal.CreateOrderAsync(order.Amount, order.Price);
+						OrderDetails order_details = ParseOrder(message);
+						PayPalClient.CreateOrderResponse response = await paypal_client.CreateOrderAsync(order_details.Amount, order_details.Price);
 						
 						if (!response.successful)
 						{
@@ -414,13 +337,13 @@ namespace Delbot
 						}
 						else
 						{
-							await Orders.WriteOrderUserAsync(response.id, order.DiscordId);
-							string log_message = "Created order " + response.id + ": amount:" + order.Amount +
-							                     " price:" + order.Price.ToString("0.00") + " uid:" + order.DiscordId;
+							await Orders.WriteOrderUserAsync(response.id, order_details.DiscordId);
+							string log_message = "Created order " + response.id + ": amount:" + order_details.Amount +
+							                     " price:" + order_details.Price.ToString("0.00") + " uid:" + order_details.DiscordId;
 							await Logging.FileLogAsync("create_log.txt", log_message);
 							await Logging.DiscordLogAsync(server, log_message);
 
-							PayPal.LinkDescription approval_link = response.links[1];
+							PayPalClient.LinkDescription approval_link = response.links[1];
 							if (!approval_link.rel.Equals("approve"))
 							{
 								SocketRole programmer_role = server.GetRole(PROGRAMMER_ROLE_ID);
@@ -435,10 +358,10 @@ namespace Delbot
 								embed_builder.Color = Color.Gold;
 								embed_builder.Url = approval_link.href;
 								embed_builder.Description = "Please pay for your Del's Bells order here.";
-								embed_builder.Title = "Del's Bells: " + order.Amount + " Million Bells";
+								embed_builder.Title = "Del's Bells: " + order_details.Amount + " Million Bells";
 								Embed embed = embed_builder.Build();
 
-								SocketUser buyer = server.GetUser(order.DiscordId);
+								SocketUser buyer = server.GetUser(order_details.DiscordId);
 								await buyer.SendMessageAsync("", false, embed);
 							}
 						}

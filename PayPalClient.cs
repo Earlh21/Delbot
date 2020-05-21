@@ -1,4 +1,5 @@
 using System;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using RestSharp;
@@ -52,115 +53,99 @@ namespace Delbot
 
             return access_token;
         }
-        
-        /// <summary>
-		/// Creates an order through PayPal and returns PayPal's response.
-		/// </summary>
-		/// <param name="amount">Amount of bells in millions.</param>
-		/// <param name="price">Total price of the order.</param>
-		/// <returns>PayPal's response, containing the order ID.</returns>
-		public async Task<CreateOrderResponse> CreateOrderAsync(int amount, decimal price)
-		{
-			var model = new CreateOrderModel
-			{
-				intent = "CAPTURE",
+
+        public async Task<Order> CreateOrderAsync(OrderDetails details, ulong admin_id)
+        {
+	        var model = new CreateOrderModel
+	        {
+		        intent = "CAPTURE",
 				
-				purchase_units =
-				new [] {
-					new PurchaseUnits
-					{
-						amount = new AmountWithBreakdown
-						{
-							currency_code = "USD",
-							value = price.ToString("0.00"),
-							breakdown = new Breakdown
-							{
-								item_total = new Money
-								{
-									currency_code = "USD",
-									value = price.ToString("0.00")
-								}
-							}
-						},
+		        purchase_units =
+			        new [] {
+				        new PurchaseUnits
+				        {
+					        amount = new AmountWithBreakdown
+					        {
+						        currency_code = "USD",
+						        value = details.Price.ToString("0.00"),
+						        breakdown = new Breakdown
+						        {
+							        item_total = new Money
+							        {
+								        currency_code = "USD",
+								        value = details.Price.ToString("0.00")
+							        }
+						        }
+					        },
 						
-						items = new []
-						{
-							new Item
-							{
-								name = amount + " million ACNH Bells",
-								quantity = "1",
-								unit_amount = new Money
-								{
-									currency_code = "USD",
-									value = price.ToString("0.00")
-								}
-							}
-						}
-					}
-				},
+					        items = new []
+					        {
+						        new Item
+						        {
+							        name = details.Amount + " " + details.ProductName,
+							        quantity = "1",
+							        unit_amount = new Money
+							        {
+								        currency_code = "USD",
+								        value = details.Price.ToString("0.00")
+							        }
+						        }
+					        }
+				        }
+			        },
 				
-				application_context =
-				{
-					shipping_preference = "NO_SHIPPING",
-					return_url = "https://earlh21.github.io/delsbells/thankyou"
-				}
-			};
+		        application_context =
+		        {
+			        shipping_preference = "NO_SHIPPING",
+			        return_url = "https://earlh21.github.io/delsbells/thankyou"
+		        }
+	        };
+	        
+	        var client = new RestClient(PAYPAL_URL);
+
+	        var request = new RestRequest(CREATE_ORDER_RESOURCE, Method.POST);
+	        request.AddHeader("Authorization", "Bearer " + await GetAccessTokenAsync());
+	        request.AddHeader("Content-Type", "application/json");
+	        request.AddJsonBody(JsonConvert.SerializeObject(model));
+
+	        var response = await client.ExecuteAsync(request);
+
+	        if (response.IsSuccessful)
+	        {
+		        CreateOrderResponse order_response = JsonConvert.DeserializeObject<CreateOrderResponse>(response.Content);
+		        Order order = new Order(details, order_response.id, admin_id);
+		        return order;
+	        }
+
+	        return null;
+        }
+
+        public async Task<CaptureOrderResponse> CaptureOrderAsync(Order order)
+        {
+	        var client = new RestClient(PAYPAL_URL);
+
+	        var request = new RestRequest("/v2/checkout/orders/" + order.PayPalId + "/capture", Method.POST);
+	        request.AddHeader("Authorization", "Bearer " + await GetAccessTokenAsync());
+	        request.AddHeader("Content-Type", "application/json");
+
+	        var response = await client.ExecuteAsync(request);
 			
-			var client = new RestClient(PAYPAL_URL);
+	        if (response.IsSuccessful)
+	        {
+		        CaptureOrderResponse order_response = JsonConvert.DeserializeObject<CaptureOrderResponse>(response.Content);
+		        order_response.successful = true;
+		        order_response.raw_content = response.Content;
+		        return order_response;
+	        }
 
-			var request = new RestRequest(CREATE_ORDER_RESOURCE, Method.POST);
-			request.AddHeader("Authorization", "Bearer " + await GetAccessTokenAsync());
-			request.AddHeader("Content-Type", "application/json");
-			request.AddJsonBody(JsonConvert.SerializeObject(model));
+	        return new CaptureOrderResponse
+	        {
+		        raw_content = response.Content,
+		        successful = false
+	        };
+        }
 
-			var response = await client.ExecuteAsync(request);
-
-			if (response.IsSuccessful)
-			{
-				CreateOrderResponse order_response = JsonConvert.DeserializeObject<CreateOrderResponse>(response.Content);
-				order_response.successful = true;
-				order_response.raw_content = response.Content;
-				return order_response;
-			}
-
-			return new CreateOrderResponse
-			{
-				raw_content = response.Content,
-				successful = false
-			};
-		}
-
-		/// <summary>
-		/// Captures an approved order's payment.
-		/// </summary>
-		/// <param name="order_id">ID of the order to capture.</param>
-		/// <returns>PayPal's response.</returns>
-		public async Task<CaptureOrderResponse> CaptureOrderAsync(string order_id)
-		{
-			var client = new RestClient(PAYPAL_URL);
-
-			var request = new RestRequest("/v2/checkout/orders/" + order_id + "/capture", Method.POST);
-			request.AddHeader("Authorization", "Bearer " + await GetAccessTokenAsync());
-			request.AddHeader("Content-Type", "application/json");
-
-			var response = await client.ExecuteAsync(request);
-			
-			if (response.IsSuccessful)
-			{
-				CaptureOrderResponse order_response = JsonConvert.DeserializeObject<CaptureOrderResponse>(response.Content);
-				order_response.successful = true;
-				order_response.raw_content = response.Content;
-				return order_response;
-			}
-
-			return new CaptureOrderResponse
-			{
-				raw_content = response.Content,
-				successful = false
-			};
-		}
-
-		public struct CaptureOrderResponse
+        public struct CaptureOrderResponse
 		{
 			public string raw_content;
 			public string status;
