@@ -1,6 +1,3 @@
-using System.IO;
-using Discord;
-
 namespace Delbot
 {
 	public class OrderDetails

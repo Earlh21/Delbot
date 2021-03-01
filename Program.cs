@@ -127,7 +127,7 @@ namespace Delbot
 				foreach (string approved_order_path in approved_order_paths)
 				{
 					string order_id = Path.GetFileNameWithoutExtension(approved_order_path);
-					PayPalOrder order = await OrderIO.GetOrderAsync(order_id);
+					PayPalOrder order = OrderIO.GetOrder(order_id);
 
 					await paypal_client.CaptureOrderAsync(order);
 					File.Delete(approved_order_path);
@@ -371,7 +371,7 @@ namespace Delbot
 						return;
 					}
 
-					OrderIO.SaveOrderAsync(order);
+					OrderIO.SaveOrder(order);
 
 					string log_message = "Created order " + order.PayPalId + ": amount:" + order_details.Amount +
 					                     " price:" + order_details.Price.ToString("0.00") + " uid:" +
