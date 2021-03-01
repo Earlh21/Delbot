@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
-using PayPalTest;
 
 namespace Delbot
 {
@@ -19,6 +18,7 @@ namespace Delbot
 		private const string TIMER_EMOJI = "⏲️";
 		private const string START_ORDER_EMOJI = "👍";
 		private const string INVALID_ORDER_EMOJI = "❌";
+		private const string APPROVED_ORDER_EMOJI = "💰";
 
 		private const ulong BOT_USER_ID = 701162359330177034;
 		private const int OPENING_CLOSING_PERIOD = 1000 * 60;
@@ -28,12 +28,18 @@ namespace Delbot
 		private static readonly TimeSpan OPENING_TIME_UTC = new TimeSpan(0, 0, 0, 0);
 		private static readonly TimeSpan CLOSING_TIME_UTC = new TimeSpan(0, 0, 0, 1);
 
+		private static readonly Dictionary<ulong, ulong> MESSAGE_ROLES = new Dictionary<ulong, ulong>
+		{
+			{0, 0}
+		};
+
 		private const ulong SERVER_ID = 701162087166247012;
 		private const ulong NEW_USER_ROLE_ID = 701165126862241822;
 		private const ulong WELCOME_CHANNEL_ID = 701167271867056158;
 		private const ulong ORDER_INSTRUCTIONS_CHANNEL_ID = 701167238258098247;
 		private const ulong SERVER_INFO_CHANNEL_ID = 701167513844711584;
 		private const ulong ORDER_CHANNEL_ID = 702313424553771030;
+		private const ulong ROLE_CHANNEL_ID = 0;
 		private const ulong BUYER_ROLE_ID = 703000426584211901;
 		private const ulong ADMIN_ROLE_ID = 710668697613762571;
 		private const ulong PROGRAMMER_ROLE_ID = 710668776332460032;
@@ -44,12 +50,19 @@ namespace Delbot
 		private static readonly TimeSpan OPENING_TIME_UTC = new TimeSpan(0, 16, 0, 0);
 		private static readonly TimeSpan CLOSING_TIME_UTC = new TimeSpan(0, 23, 59, 0);
 		
+		private static readonly Dictionary<ulong, ulong> MESSAGE_ROLES = new Dictionary<ulong, ulong>
+		{
+			{0, 0}
+		};
+
+
 		private const ulong SERVER_ID = 699760863925633044;
 		private const ulong NEW_USER_ROLE_ID = 699783209029730384;
 		private const ulong WELCOME_CHANNEL_ID = 699797686588538910;
 		private const ulong ORDER_INSTRUCTIONS_CHANNEL_ID = 701117387663081522;
 		private const ulong SERVER_INFO_CHANNEL_ID = 699765156447518784;
 		private const ulong ORDER_CHANNEL_ID = 701118059938840646;
+		private const ulong ROLE_CHANNEL_ID = 0;
 		private const ulong BUYER_ROLE_ID = 699784096166969658;
 		private const ulong ADMIN_ROLE_ID = 706640860476997683;
 		private const ulong PROGRAMMER_ROLE_ID = 699796932087906336;
@@ -62,7 +75,7 @@ namespace Delbot
 			string paypal_client_id = Tokens.GetToken(Tokens.TokenType.PayPalClientId);
 			string paypal_client_secret = Tokens.GetToken(Tokens.TokenType.PayPalClientSecret);
 			paypal_client = new PayPalClient(paypal_client_id, paypal_client_secret);
-			
+
 			discord_client = new DiscordSocketClient();
 
 			discord_client.UserJoined += UserJoined;
@@ -100,24 +113,13 @@ namespace Delbot
 			}
 		}
 
-		//TODO: Refactor these out, the objects have a Mention property
-		private static string MentionChannel(ulong channel_id)
-		{
-			return "<#" + channel_id + ">";
-		}
-
-		private static string MentionUser(ulong user_id)
-		{
-			return "<@" + user_id + ">";
-		}
-
 		private static async void PaymentCaptureLoopAsync()
 		{
 			while (server == null)
 			{
 				await Task.Delay(1000);
 			}
-			
+
 			while (true)
 			{
 				string[] approved_order_paths = Directory.GetFiles(APPROVED_ORDERS_DIRECTORY);
@@ -125,23 +127,14 @@ namespace Delbot
 				foreach (string approved_order_path in approved_order_paths)
 				{
 					string order_id = Path.GetFileNameWithoutExtension(approved_order_path);
-					await paypal_client.CaptureOrderAsync(order_id);
+					PayPalOrder order = await OrderIO.GetOrderAsync(order_id);
+
+					await paypal_client.CaptureOrderAsync(order);
 					File.Delete(approved_order_path);
-					
-					await Logging.FileLogAsync("capture_log.txt", "Captured payment for order " + order_id);
-					
-					EmbedBuilder embed_builder = new EmbedBuilder();
-					embed_builder.Color = Color.Green;
-					embed_builder.Title = "Order payment processed";
-					embed_builder.Description =
-						"Your payment has been processed. " +
-						"Del's Bells admins have been notified and will contact you at their first opportunity.";
-					Embed embed = embed_builder.Build();
-					
-					string discord_id_string = await Orders.GetOrderUserAsync(order_id);
-					await Orders.RemoveOrderAsync(order_id);
-					
-					if (discord_id_string == null)
+
+					#region Error Checking
+
+					if (order == null)
 					{
 						SocketRole programmer_role = server.GetRole(PROGRAMMER_ROLE_ID);
 						string log_message =
@@ -151,8 +144,7 @@ namespace Delbot
 						continue;
 					}
 
-					ulong discord_id = Convert.ToUInt64(discord_id_string);
-					SocketUser user = server.GetUser(discord_id);
+					SocketUser user = server.GetUser(order.OrderDetails.UserId);
 					if (user == null)
 					{
 						SocketRole programmer_role = server.GetRole(PROGRAMMER_ROLE_ID);
@@ -160,21 +152,38 @@ namespace Delbot
 							"Order payment captured but order user wasn't found in the server. " +
 							"Order ID: " + order_id + " " + programmer_role.Mention;
 						await Logging.DiscordLogAsync(server, log_message);
-						return;
+						continue;
 					}
 
+					#endregion
+
+					await Logging.FileLogAsync("capture_log.txt", "Captured payment for order " + order_id);
+
+					EmbedBuilder embed_builder = new EmbedBuilder();
+					embed_builder.Color = Color.Green;
+					embed_builder.Title = "Order payment processed";
+					embed_builder.Description =
+						"Your payment has been processed. " +
+						"Del's Bells admins have been notified and will contact you at their first opportunity.";
+					Embed embed = embed_builder.Build();
 					await user.SendMessageAsync("", false, embed);
 
 					SocketRole admin_role = server.GetRole(ADMIN_ROLE_ID);
 					string message = "Order " + order_id + " approved and payment captured. User: " +
 					                 user.Mention + ". " + admin_role.Mention;
 					await Logging.DiscordLogAsync(server, message);
+
+					SocketTextChannel order_channel = server.GetTextChannel(ORDER_CHANNEL_ID);
+					IMessage order_message = await order_channel.GetMessageAsync(order.OrderDetails.MessageId);
+					await order_message.AddReactionAsync(new Emoji(APPROVED_ORDER_EMOJI));
+
+					OrderIO.RemoveOrder(order);
 				}
-				
+
 				await Task.Delay(PAYMENT_CAPTURE_PERIOD);
 			}
 		}
-		
+
 		private static async void OpeningClosingLoopAsync()
 		{
 			bool sent_opening_message = false;
@@ -244,7 +253,7 @@ namespace Delbot
 			{
 				return;
 			}
-			
+
 			if (message.Channel.Id != ORDER_CHANNEL_ID)
 			{
 				return;
@@ -259,7 +268,7 @@ namespace Delbot
 
 			try
 			{
-				ParseOrder(message);
+				OrderIO.ParseMessage(message);
 			}
 			catch (ArgumentException ex)
 			{
@@ -283,27 +292,24 @@ namespace Delbot
 
 			SocketRole new_user_role = server.GetRole(NEW_USER_ROLE_ID);
 
+			SocketTextChannel order_instructions_channel = server.GetTextChannel(ORDER_INSTRUCTIONS_CHANNEL_ID);
+			SocketTextChannel server_info_channel = server.GetTextChannel(SERVER_INFO_CHANNEL_ID);
 			SocketTextChannel welcome_channel = server.GetTextChannel(WELCOME_CHANNEL_ID);
 
-			await welcome_channel.SendMessageAsync(MentionUser(user_joined.Id) +
+			await welcome_channel.SendMessageAsync(user_joined.Mention +
 			                                       " Welcome to Del's Bells-- We sell Bells! " +
 			                                       "If you'd like to purchase Bells, you may make your way to " +
-			                                       MentionChannel(ORDER_INSTRUCTIONS_CHANNEL_ID) +
+			                                       order_instructions_channel.Mention +
 			                                       " after reading " +
-			                                       MentionChannel(SERVER_INFO_CHANNEL_ID) +
+			                                       server_info_channel.Mention +
 			                                       ". If you aren't interested in purchasing Bells, ensure you still read " +
-			                                       MentionChannel(SERVER_INFO_CHANNEL_ID) +
+			                                       server_info_channel.Mention +
 			                                       ", welcome to our ACNH community, and enjoy your stay, gronk." +
 			                                       Environment.NewLine +
 			                                       "------------------------------------------------------------------------------------------------------------------------------------------------------------------------");
 			await user_joined.AddRoleAsync(new_user_role);
 		}
 
-		private static OrderDetails ParseOrder(IMessage message)
-		{
-			
-		}
-		
 		private static async Task ReactionAdded(Cacheable<IUserMessage, ulong> message_cacheable,
 			ISocketMessageChannel channel, SocketReaction reaction_added)
 		{
@@ -311,68 +317,6 @@ namespace Delbot
 			{
 				IMessage message = await channel.GetMessageAsync(reaction_added.MessageId);
 				SocketGuildUser message_author = server.GetUser(message.Author.Id);
-
-				//Add the buyer role to the user if the reaction matches
-				SocketRole buyer_role = server.GetRole(BUYER_ROLE_ID);
-				foreach (string buyer_role_emoji in BUYER_ROLE_EMOJIS)
-				{
-					if (reaction_added.Emote.Name.Equals(buyer_role_emoji))
-					{
-						await message_author.AddRoleAsync(buyer_role);
-					}
-				}
-
-				//Create and send PayPal order if the reaction matches
-				if (reaction_added.Emote.Name.Equals(START_ORDER_EMOJI))
-				{
-					try
-					{
-						//TODO: Add a check here for null
-						OrderDetails order_details = ParseOrder(message);
-						PayPalClient.CreateOrderResponse response = await paypal_client.CreateOrderAsync(order_details.Amount, order_details.Price);
-						
-						if (!response.successful)
-						{
-							await Logging.DiscordLogAsync(server, "Order creation failed: " + response.raw_content);
-						}
-						else
-						{
-							await Orders.WriteOrderUserAsync(response.id, order_details.DiscordId);
-							string log_message = "Created order " + response.id + ": amount:" + order_details.Amount +
-							                     " price:" + order_details.Price.ToString("0.00") + " uid:" + order_details.DiscordId;
-							await Logging.FileLogAsync("create_log.txt", log_message);
-							await Logging.DiscordLogAsync(server, log_message);
-
-							PayPalClient.LinkDescription approval_link = response.links[1];
-							if (!approval_link.rel.Equals("approve"))
-							{
-								SocketRole programmer_role = server.GetRole(PROGRAMMER_ROLE_ID);
-								log_message =
-									"Failed to find approval link after creating order " + response.id +
-									programmer_role.Mention;
-								await Logging.DiscordLogAsync(server, log_message);
-							}
-							else
-							{
-								EmbedBuilder embed_builder = new EmbedBuilder();
-								embed_builder.Color = Color.Gold;
-								embed_builder.Url = approval_link.href;
-								embed_builder.Description = "Please pay for your Del's Bells order here.";
-								embed_builder.Title = "Del's Bells: " + order_details.Amount + " Million Bells";
-								Embed embed = embed_builder.Build();
-
-								SocketUser buyer = server.GetUser(order_details.DiscordId);
-								await buyer.SendMessageAsync("", false, embed);
-							}
-						}
-					}
-					catch (ArgumentException ex)
-					{
-						SocketTextChannel order_channel = server.GetTextChannel(ORDER_CHANNEL_ID);
-						await order_channel.SendMessageAsync(ex.Message);
-						return;
-					}
-				}
 
 				//Copy all reactions in the message
 				Dictionary<IEmote, ReactionMetadata> reactions = new Dictionary<IEmote, ReactionMetadata>();
@@ -394,6 +338,67 @@ namespace Delbot
 						}
 					}
 				}
+
+				//Add the buyer role to the user if the reaction matches
+				SocketRole buyer_role = server.GetRole(BUYER_ROLE_ID);
+				foreach (string buyer_role_emoji in BUYER_ROLE_EMOJIS)
+				{
+					if (reaction_added.Emote.Name.Equals(buyer_role_emoji))
+					{
+						await message_author.AddRoleAsync(buyer_role);
+					}
+				}
+
+				//Create and send PayPal order if the reaction matches
+				if (reaction_added.Emote.Name.Equals(START_ORDER_EMOJI))
+				{
+					OrderDetails order_details;
+					try
+					{
+						order_details = OrderIO.ParseMessage(message);
+					}
+					catch (ArgumentException ex)
+					{
+						SocketTextChannel order_channel = server.GetTextChannel(ORDER_CHANNEL_ID);
+						await order_channel.SendMessageAsync(ex.Message);
+						return;
+					}
+
+					PayPalOrder order = await paypal_client.CreateOrderAsync(order_details, reaction_added.UserId);
+					if (order == null)
+					{
+						await Logging.DiscordLogAsync(server, "Order creation failed.");
+						return;
+					}
+
+					OrderIO.SaveOrderAsync(order);
+
+					string log_message = "Created order " + order.PayPalId + ": amount:" + order_details.Amount +
+					                     " price:" + order_details.Price.ToString("0.00") + " uid:" +
+					                     order_details.UserId + " product:\"" + order.OrderDetails.ProductName + "\"";
+					await Logging.FileLogAsync("create_log.txt", log_message);
+					await Logging.DiscordLogAsync(server, log_message);
+
+					EmbedBuilder embed_builder = new EmbedBuilder();
+					embed_builder.Color = Color.Gold;
+					embed_builder.Url = order.ApprovalLink;
+					embed_builder.Description = "Please pay for your Del's Bells order here.";
+					embed_builder.Title = "Del's Bells: " + order_details.Amount + " Million Bells";
+					Embed embed = embed_builder.Build();
+
+					SocketUser buyer = server.GetUser(order_details.UserId);
+					await buyer.SendMessageAsync("", false, embed);
+				}
+			}
+			else if (channel.Id == ROLE_CHANNEL_ID)
+			{
+				ulong message_role_id = MESSAGE_ROLES[message_cacheable.Value.Id];
+				ulong user_id = reaction_added.User.Value.Id;
+				
+				SocketRole message_role = server.GetRole(message_role_id);
+				SocketGuildUser user = server.GetUser(user_id);
+
+				await user.AddRoleAsync(message_role);
 			}
 		}
 	}

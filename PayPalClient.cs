@@ -54,7 +54,7 @@ namespace Delbot
             return access_token;
         }
 
-        public async Task<Order> CreateOrderAsync(OrderDetails details, ulong admin_id)
+        public async Task<PayPalOrder> CreateOrderAsync(OrderDetails details, ulong admin_id)
         {
 	        var model = new CreateOrderModel
 	        {
@@ -113,14 +113,16 @@ namespace Delbot
 	        if (response.IsSuccessful)
 	        {
 		        CreateOrderResponse order_response = JsonConvert.DeserializeObject<CreateOrderResponse>(response.Content);
-		        Order order = new Order(details, order_response.id, admin_id);
+		        PayPalOrder order = new PayPalOrder(details, order_response.id, admin_id, order_response.links[1].href);
 		        return order;
 	        }
 
+	        Console.WriteLine(response.Content);
+	        
 	        return null;
         }
 
-        public async Task<CaptureOrderResponse> CaptureOrderAsync(Order order)
+        public async Task<CaptureOrderResponse> CaptureOrderAsync(PayPalOrder order)
         {
 	        var client = new RestClient(PAYPAL_URL);
 

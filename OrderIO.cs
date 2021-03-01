@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Discord;
 
 namespace Delbot
@@ -44,11 +46,11 @@ namespace Delbot
             };
 
 #if DEBUG
-        private static readonly string CURRENT_ORDERS_PATH =
-            Environment.GetEnvironmentVariable("HOME") + "/debug_current_orders.txt";
+        private static readonly string CURRENT_ORDERS_DIR =
+            Environment.GetEnvironmentVariable("HOME") + "/debug_active_orders/";
 #else
-		private static readonly string CURRENT_ORDERS_PATH =
-			Environment.GetEnvironmentVariable("HOME") + "/current_orders.txt";
+		private static readonly string CURRENT_ORDERS_DIR =
+			Environment.GetEnvironmentVariable("HOME") + "/active_orders/";
 #endif
 
         public static OrderDetails ParseMessage(IMessage message)
@@ -162,27 +164,64 @@ namespace Delbot
                 paypal_name, product_name);
         }
 
-        public static void SaveOrder(Order order)
+        public static async void SaveOrderAsync(PayPalOrder order)
         {
+            //TODO: Replace this mess with serialization
             List<string> parameters = new List<string>();
-            parameters.Add("amount:" + order.OrderDetails.Amount);
-            parameters.Add("price:" + order.OrderDetails.Price);
-            parameters.Add("in_game_name:" + order.OrderDetails.InGameName);
-            parameters.Add("discord_id:" + order.OrderDetails.DiscordId);
-            parameters.Add("message_id:" + order.OrderDetails.MessageId);
-            parameters.Add("island_name:" + order.OrderDetails.IslandName);
-            parameters.Add("paypal_name:" + order.OrderDetails.PayPalName);
-            parameters.Add("product_name:" + order.OrderDetails.ProductName);
-            parameters.Add("paypal_id:" + order.PayPalId);
-            parameters.Add("admin_id:" + order.AdminId);
+            parameters.Add("Amount:" + order.OrderDetails.Amount);
+            parameters.Add("Price:" + order.OrderDetails.Price);
+            parameters.Add("InGameName:" + order.OrderDetails.InGameName);
+            parameters.Add("UserId:" + order.OrderDetails.UserId);
+            parameters.Add("MessageId:" + order.OrderDetails.MessageId);
+            parameters.Add("IslandName:" + order.OrderDetails.IslandName);
+            parameters.Add("PayPalName:" + order.OrderDetails.PayPalName);
+            parameters.Add("ProductName:" + order.OrderDetails.ProductName);
+            parameters.Add("PayPalId:" + order.PayPalId);
+            parameters.Add("AdminId:" + order.AdminId);
+            parameters.Add("ApprovalLink:" + order.ApprovalLink);
+
+            string file_path = CURRENT_ORDERS_DIR + order.PayPalId + ".txt";
+
+            await File.WriteAllLinesAsync(file_path, parameters);
         }
 
-        public static void RemoveOrder(Order order)
+        public static void RemoveOrder(PayPalOrder order)
         {
+            string file_path = CURRENT_ORDERS_DIR + order.PayPalId + ".txt";
+            File.Delete(file_path);
         }
 
-        public static void GetOrder(string order_id)
+        public static async Task<PayPalOrder> GetOrderAsync(string order_id)
         {
+            string file_path = CURRENT_ORDERS_DIR + order_id + ".txt";
+            if (!File.Exists(file_path))
+            {
+                return null;
+            }
+
+            string[] contents = await File.ReadAllLinesAsync(file_path);
+            
+            Dictionary<string, string> data = new Dictionary<string, string>();
+            foreach (string datum in contents)
+            {
+                string[] split_datum = datum.Split(":");
+                data[split_datum[0]] = split_datum[1];
+            }
+
+            int amount = Convert.ToInt32(data["Amount"]);
+            decimal price = Convert.ToDecimal(data["Price"]);
+            string in_game_name = data["InGameName"];
+            ulong user_id = Convert.ToUInt64(data["UserId"]);
+            ulong message_id = Convert.ToUInt64(data["MessageId"]);
+            string island_name = data["IslandName"];
+            string paypal_name = data["PayPalName"];
+            string product_name = data["ProdutName"];
+            string paypal_id = data["PayPalId"];
+            ulong admin_id = Convert.ToUInt64(data["AdminId"]);
+            string approval_link = data["ApprovalLink"];
+            
+            OrderDetails order_details = new OrderDetails(amount, price, in_game_name, user_id, message_id, island_name, paypal_name, product_name);
+            return new PayPalOrder(order_details, paypal_id, admin_id, approval_link);
         }
     }
 }
